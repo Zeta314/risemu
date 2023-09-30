@@ -339,6 +339,89 @@ impl CPU {
                         self.xregs[dest] = self.xregs[source1] & self.xregs[source2];
                     }
 
+                    // =============================================================================
+                    // RV32M
+
+                    // MUL
+                    (0b000, 0b0000001) => {
+                        self.xregs[dest] = (self.xregs[source1] as i32)
+                            .wrapping_mul(self.xregs[source2] as i32)
+                            as u32;
+                    }
+
+                    // MULH
+                    (0b001, 0b0000001) => {
+                        self.xregs[dest] = ((self.xregs[source1] as i32 as i64)
+                            .wrapping_mul(self.xregs[source2] as i32 as i64)
+                            >> 32) as u32;
+                    }
+
+                    // MULHSU
+                    (0b010, 0b0000001) => {
+                        self.xregs[dest] = ((self.xregs[source1] as i32 as u64)
+                            .wrapping_mul(self.xregs[source2] as u64)
+                            >> 32) as u32;
+                    }
+
+                    // MULHU
+                    (0b011, 0b0000001) => {
+                        self.xregs[dest] = ((self.xregs[source1] as u64)
+                            .wrapping_mul(self.xregs[source2] as u64)
+                            >> 32) as u32;
+                    }
+
+                    // DIV
+                    (0b100, 0b0000001) => {
+                        let dividend = self.xregs[source1] as i32;
+                        let divisor = self.xregs[source2] as i32;
+
+                        self.xregs[dest] = if divisor == 0 {
+                            u32::MAX // division by zero
+                        } else if dividend == i32::MIN && divisor == -1 {
+                            dividend as u32 // overflow
+                        } else {
+                            dividend.wrapping_div(divisor) as u32
+                        }
+                    }
+
+                    // DIVU
+                    (0b101, 0b0000001) => {
+                        let dividend = self.xregs[source1];
+                        let divisor = self.xregs[source2];
+
+                        self.xregs[dest] = if divisor == 0 {
+                            u32::MAX // division by zero
+                        } else {
+                            dividend.wrapping_div(divisor)
+                        }
+                    }
+
+                    // REM
+                    (0b110, 0b0000001) => {
+                        let dividend = self.xregs[source1] as i32;
+                        let divisor = self.xregs[source2] as i32;
+
+                        self.xregs[dest] = if divisor == 0 {
+                            dividend as u32 // division by zero
+                        } else if dividend == i32::MIN && divisor == -1 {
+                            0 // overflow
+                        } else {
+                            dividend.wrapping_rem(divisor) as u32
+                        }
+                    }
+
+                    // REMU
+                    (0b111, 0b0000001) => {
+                        let dividend = self.xregs[source1];
+                        let divisor = self.xregs[source2];
+
+                        self.xregs[dest] = if divisor == 0 {
+                            dividend // division by zero
+                        } else {
+                            dividend.wrapping_rem(divisor)
+                        }
+                    }
+
                     _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
