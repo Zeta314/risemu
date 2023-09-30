@@ -4,6 +4,7 @@ description = "RISC-V emulator written in rust"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/Zeta314/riscv-emu"
 authors = ["Zeta314"]
 keywords = ["riscv", "risc-v", "emulator"]
 categories = ["emulators", "simulation"]
