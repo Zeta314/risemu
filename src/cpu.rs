@@ -43,7 +43,7 @@ impl CPU {
     }
 
     fn execute(&mut self, instruction: Instruction) -> Result<(), RVException> {
-        self.xregs[0] = 0; // hardwire x0 to be zero
+        self.xregs[0] = 0x00; // hardwire x0 to be zero
 
         let opcode = instruction & 0x7F;
         let funct3 = (instruction & 0x00007000) >> 12;
@@ -90,42 +90,42 @@ impl CPU {
 
                 match funct3 {
                     // BEQ
-                    0x00 => {
+                    0b000 => {
                         if self.xregs[source1] == self.xregs[source2] {
                             self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BNE
-                    0x01 => {
+                    0b001 => {
                         if self.xregs[source1] != self.xregs[source2] {
                             self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BLT
-                    0x04 => {
+                    0b100 => {
                         if (self.xregs[source1] as i32) < (self.xregs[source2] as i32) {
                             self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BGE
-                    0x05 => {
+                    0b101 => {
                         if (self.xregs[source1] as i32) >= (self.xregs[source2] as i32) {
                             self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BLTU
-                    0x06 => {
+                    0b110 => {
                         if self.xregs[source1] < self.xregs[source2] {
                             self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BGEU
-                    0x07 => {
+                    0b111 => {
                         if self.xregs[source1] >= self.xregs[source2] {
                             self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
@@ -338,13 +338,11 @@ impl CPU {
             Opcodes::MISC => {
                 match funct3 {
                     // FENCE
-                    0x00 => {}
+                    0b000 => {}
 
                     _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
-
-            _ => return Err(RVException::IllegalInstruction(instruction)),
         }
 
         Ok(())
