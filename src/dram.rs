@@ -1,6 +1,9 @@
 use std::mem;
 
-use crate::{bus::Device, exception::RVException};
+use crate::{
+    bus::{Address, Device},
+    exception::RVException,
+};
 
 pub struct DRAM {
     memory: Vec<u8>,
@@ -18,18 +21,18 @@ impl DRAM {
     }
 
     // write routines
-    fn write08(&mut self, address: u32, value: u8) {
+    fn write08(&mut self, address: Address, value: u8) {
         let index = address as usize;
         self.memory[index] = value;
     }
 
-    fn write16(&mut self, address: u32, value: u16) {
+    fn write16(&mut self, address: Address, value: u16) {
         let index = address as usize;
         self.memory[index + 0] = ((value >> 0) & 0xff) as u8;
         self.memory[index + 1] = ((value >> 8) & 0xff) as u8;
     }
 
-    fn write32(&mut self, address: u32, value: u32) {
+    fn write32(&mut self, address: Address, value: u32) {
         let index = address as usize;
         self.memory[index + 0] = ((value >> 0) & 0xff) as u8;
         self.memory[index + 1] = ((value >> 8) & 0xff) as u8;
@@ -38,17 +41,17 @@ impl DRAM {
     }
 
     // read routines
-    fn read08(&self, address: u32) -> u8 {
+    fn read08(&self, address: Address) -> u8 {
         let index = address as usize;
         self.memory[index]
     }
 
-    fn read16(&self, address: u32) -> u16 {
+    fn read16(&self, address: Address) -> u16 {
         let index = address as usize;
         (self.memory[index] as u16) | ((self.memory[index + 1] as u16) << 8)
     }
 
-    fn read32(&self, address: u32) -> u32 {
+    fn read32(&self, address: Address) -> u32 {
         let index = address as usize;
         (self.memory[index] as u32)
             | ((self.memory[index + 1] as u32) << 8)
@@ -62,8 +65,8 @@ impl Device for DRAM {
         self.memory.len()
     }
 
-    fn read<T: Sized>(&self, address: u32) -> Result<T, RVException> {
-        match mem::size_of::<T>() {
+    fn read<T: Sized>(&self, address: Address) -> Result<T, RVException> {
+        match 8 * mem::size_of::<T>() {
             08 => Ok(unsafe { mem::transmute_copy(&self.read08(address)) }),
             16 => Ok(unsafe { mem::transmute_copy(&self.read16(address)) }),
             32 => Ok(unsafe { mem::transmute_copy(&self.read32(address)) }),
@@ -72,8 +75,8 @@ impl Device for DRAM {
         }
     }
 
-    fn write<T: Sized>(&mut self, address: u32, value: T) -> Result<(), RVException> {
-        match mem::size_of::<T>() {
+    fn write<T: Sized>(&mut self, address: Address, value: T) -> Result<(), RVException> {
+        match 8 * mem::size_of::<T>() {
             08 => Ok(self.write08(address, unsafe { mem::transmute_copy(&value) })),
             16 => Ok(self.write16(address, unsafe { mem::transmute_copy(&value) })),
             32 => Ok(self.write32(address, unsafe { mem::transmute_copy(&value) })),

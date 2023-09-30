@@ -16,16 +16,16 @@ pub struct Bus {
 
 impl Bus {
     pub fn read<T: Sized>(&self, address: Address) -> Result<T, RVException> {
-        if address >= DRAM_BASE && address < (self.dram.size() as Address) {
-            return self.dram.read::<T>(address);
+        if address >= DRAM_BASE && address < (DRAM_BASE + self.dram.size() as Address) {
+            return self.dram.read::<T>(address - DRAM_BASE);
         }
 
         Err(RVException::LoadAccessFault)
     }
 
     pub fn write<T: Sized>(&mut self, address: Address, value: T) -> Result<(), RVException> {
-        if address >= DRAM_BASE && address < (self.dram.size() as Address) {
-            return self.dram.write::<T>(address, value);
+        if address >= DRAM_BASE && address < (DRAM_BASE + self.dram.size() as Address) {
+            return self.dram.write::<T>(address - DRAM_BASE, value);
         }
 
         Err(RVException::StoreAccessFault)
