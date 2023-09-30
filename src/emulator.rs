@@ -28,4 +28,24 @@ impl Emulator {
         self.cpu.bus.dram.initialize(data);
         self.cpu.pc = DRAM_BASE;
     }
+
+    pub fn run(&mut self) {
+        let mut last_pc;
+        loop {
+            last_pc = self.cpu.pc;
+
+            match self.cpu.fetch_and_execute() {
+                Ok(_) => {}
+                Err(ex) => {
+                    println!("{ex:#?} @ {:#x}", self.cpu.pc);
+                    break;
+                }
+            }
+
+            // if the instruction jumps to itself, terminate the simulation
+            if last_pc == self.cpu.pc {
+                break;
+            }
+        }
+    }
 }
