@@ -5,7 +5,7 @@ use crate::{
 };
 
 pub struct Emulator {
-    cpu: CPU,
+    pub cpu: CPU,
 }
 
 impl Emulator {
@@ -22,5 +22,10 @@ impl Emulator {
         cpu.xregs[2] = DRAM_BASE + (ram_size as u32);
 
         Self { cpu }
+    }
+
+    pub fn init_dram(&mut self, data: Vec<u8>) {
+        self.cpu.bus.dram.initialize(data);
+        self.cpu.pc = DRAM_BASE;
     }
 }

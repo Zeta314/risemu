@@ -1,8 +1,16 @@
 [package]
 name = "riscv-emu"
+description = "RISC-V emulator written in rust"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+authors = ["Zeta314"]
+keywords = ["riscv", "risc-v", "emulator"]
+categories = ["emulators", "simulation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]

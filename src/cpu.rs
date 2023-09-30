@@ -9,6 +9,7 @@ pub type Register = u32;
 pub type Instruction = u32;
 
 #[repr(u32)]
+#[allow(dead_code)]
 enum Opcodes {
     LUI = 0b0110111,
     AUIPC = 0b0010111,
@@ -29,11 +30,12 @@ pub struct CPU {
 }
 
 impl CPU {
-    pub fn cycle(&mut self) -> Result<(), RVException> {
+    pub fn fetch_and_execute(&mut self) -> Result<(), RVException> {
         self.xregs[0] = 0x00; // hardwire x0 to be zero
 
         let instruction = self.fetch()?;
         self.execute(instruction)?;
+        self.pc += 4;
 
         Ok(())
     }
