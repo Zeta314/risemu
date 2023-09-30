@@ -2,7 +2,7 @@ use crate::{dram::DRAM, exception::RVException};
 
 pub type Address = u32;
 
-const DRAM_BASE: Address = 0x8000_0000;
+pub const DRAM_BASE: Address = 0x8000_0000;
 
 pub trait Device {
     fn size(&self) -> usize;
@@ -11,7 +11,7 @@ pub trait Device {
 }
 
 pub struct Bus {
-    dram: DRAM,
+    pub dram: DRAM,
 }
 
 impl Bus {

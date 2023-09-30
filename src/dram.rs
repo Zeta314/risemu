@@ -9,7 +9,7 @@ pub struct DRAM {
 impl DRAM {
     pub fn new(size: usize) -> Self {
         Self {
-            memory: vec![0u8; size],
+            memory: vec![0x00; size],
         }
     }
 

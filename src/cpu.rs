@@ -23,13 +23,21 @@ enum Opcodes {
 }
 
 pub struct CPU {
-    xregs: [Register; 32],
-    pc: Register,
-
-    bus: Bus,
+    pub xregs: [Register; 32],
+    pub pc: Register,
+    pub bus: Bus,
 }
 
 impl CPU {
+    pub fn cycle(&mut self) -> Result<(), RVException> {
+        self.xregs[0] = 0x00; // hardwire x0 to be zero
+
+        let instruction = self.fetch()?;
+        self.execute(instruction)?;
+
+        Ok(())
+    }
+
     fn read<T: Sized>(&self, address: Address) -> Result<T, RVException> {
         self.bus.read::<T>(address)
     }
@@ -43,8 +51,6 @@ impl CPU {
     }
 
     fn execute(&mut self, instruction: Instruction) -> Result<(), RVException> {
-        self.xregs[0] = 0x00; // hardwire x0 to be zero
-
         let opcode = instruction & 0x7F;
         let funct3 = (instruction & 0x00007000) >> 12;
         let funct7 = (instruction & 0xFe000000) >> 25;
