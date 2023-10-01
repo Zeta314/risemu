@@ -1,5 +1,3 @@
-use std::mem;
-
 use crate::{
     bus::{Address, Bus},
     exception::RVException,
@@ -7,21 +5,6 @@ use crate::{
 
 pub type Register = u32;
 pub type Instruction = u32;
-
-#[repr(u32)]
-#[allow(dead_code)]
-enum Opcodes {
-    LUI = 0b0110111,
-    AUIPC = 0b0010111,
-    JAL = 0b1101111,
-    JALR = 0b1100111,
-    BRANCH = 0b1100011,
-    LOAD = 0b0000011,
-    STORE = 0b0100011,
-    IMM = 0b0010011,
-    OP = 0b0110011,
-    MISC = 0b0001111,
-}
 
 pub struct CPU {
     pub xregs: [Register; 32],
@@ -61,16 +44,19 @@ impl CPU {
         let source1 = ((instruction & 0x000F8000) >> 15) as usize;
         let source2 = ((instruction & 0x01F00000) >> 20) as usize;
 
-        match unsafe { mem::transmute(opcode) } {
-            Opcodes::LUI => {
+        match opcode {
+            // LUI
+            0b0110111 => {
                 self.xregs[dest] = instruction & 0xFFFFF000;
             }
 
-            Opcodes::AUIPC => {
+            // AUIPC
+            0b0010111 => {
                 self.xregs[dest] = self.pc.wrapping_add(instruction & 0xFFFFF000);
             }
 
-            Opcodes::JAL => {
+            // JAL
+            0b1101111 => {
                 self.xregs[dest] = self.pc.wrapping_add(0x04);
 
                 let offset = ((instruction & 0x80000000) as i32 >> 11) as u32
@@ -81,7 +67,8 @@ impl CPU {
                 self.pc = self.pc.wrapping_add(offset).wrapping_sub(0x04);
             }
 
-            Opcodes::JALR => {
+            // JALR
+            0b1100111 => {
                 let tmp = self.pc.wrapping_add(0x04);
                 let offset = (instruction as i32) >> 20;
                 let target = ((self.xregs[source1] as i32).wrapping_add(offset)) & !0x01;
@@ -90,7 +77,8 @@ impl CPU {
                 self.xregs[dest] = tmp;
             }
 
-            Opcodes::BRANCH => {
+            // BRANCH
+            0b1100011 => {
                 let immediate = ((instruction & 0x80000000) as i32 >> 19) as u32
                     | ((instruction & 0x80) << 4)
                     | ((instruction >> 20) & 0x7e0)
@@ -143,7 +131,8 @@ impl CPU {
                 }
             }
 
-            Opcodes::LOAD => {
+            // LOAD
+            0b0000011 => {
                 let offset = ((instruction as i32) >> 20) as u32;
                 let address = self.xregs[source1].wrapping_add(offset);
 
@@ -182,7 +171,8 @@ impl CPU {
                 }
             }
 
-            Opcodes::STORE => {
+            // STORE
+            0b0100011 => {
                 let offset = (((instruction & 0xFE000000) as i32 >> 20) as u32)
                     | ((instruction >> 7) & 0x1F);
                 let address = self.xregs[source1].wrapping_add(offset);
@@ -207,7 +197,8 @@ impl CPU {
                 }
             }
 
-            Opcodes::IMM => {
+            // IMMEDIATE
+            0b0010011 => {
                 let immediate = ((instruction as i32) >> 20) as u32;
                 let funct6 = funct7 >> 1;
 
@@ -277,7 +268,8 @@ impl CPU {
                 }
             }
 
-            Opcodes::OP => {
+            // OPERATION
+            0b0110011 => {
                 match (funct3, funct7) {
                     // ADD
                     (0b000, 0b0000000) => {
@@ -426,7 +418,8 @@ impl CPU {
                 }
             }
 
-            Opcodes::MISC => {
+            // MEM-MISC
+            0b0001111 => {
                 match funct3 {
                     // FENCE
                     0b000 => {}
@@ -434,6 +427,8 @@ impl CPU {
                     _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
+
+            _ => return Err(RVException::IllegalInstruction(instruction)),
         }
 
         Ok(())
