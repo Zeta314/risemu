@@ -424,6 +424,10 @@ impl CPU {
                     // FENCE
                     0b000 => {}
 
+                    // Zifencei
+                    // FENCE.I
+                    0b001 => {}
+
                     _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
