@@ -21,7 +21,7 @@ impl Emulator {
         };
 
         // set the stack pointer to the end of DRAM
-        cpu.xregs[2] = DRAM_BASE + (ram_size as u32);
+        cpu.xregs[2] = DRAM_BASE + (ram_size as u64);
 
         Self { cpu }
     }

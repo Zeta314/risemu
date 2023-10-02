@@ -1,6 +1,6 @@
 use crate::{dram::DRAM, exception::RVException};
 
-pub type Address = u32;
+pub type Address = u64;
 
 pub const DRAM_BASE: Address = 0x8000_0000;
 
