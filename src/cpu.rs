@@ -42,7 +42,7 @@ impl CPU {
     fn execute(&mut self, instruction: Instruction) -> Result<(), RVException> {
         let opcode = instruction & 0x7F;
         let funct3 = (instruction & 0x00007000) >> 12;
-        let funct7 = (instruction & 0xFe000000) >> 25;
+        let funct7 = (instruction & 0xFE000000) >> 25;
 
         let dest = ((instruction & 0xF80) >> 7) as usize;
         let source1 = ((instruction & 0x000F8000) >> 15) as usize;
@@ -56,19 +56,20 @@ impl CPU {
 
             // AUIPC
             0b0010111 => {
-                self.xregs[dest] = self.pc.wrapping_add(instruction & 0xFFFFF000);
+                self.xregs[dest] = self.pc + (instruction & 0xFFFFF000);
             }
 
             // JAL
             0b1101111 => {
-                self.xregs[dest] = self.pc.wrapping_add(0x04);
+                self.xregs[dest] = self.pc + 0x04;
 
                 let offset = ((instruction & 0x80000000) as i32 >> 11) as u32
                     | (instruction & 0xff000)
                     | ((instruction >> 9) & 0x800)
                     | ((instruction >> 20) & 0x7fe);
 
-                self.pc = self.pc.wrapping_add(offset).wrapping_sub(0x04);
+                self.pc += offset;
+                self.pc -= 0x04;
             }
 
             // JALR
@@ -77,7 +78,9 @@ impl CPU {
                 let offset = (instruction as i32) >> 20;
                 let target = ((self.xregs[source1] as i32).wrapping_add(offset)) & !0x01;
 
-                self.pc = (target as u32).wrapping_sub(0x04);
+                self.pc = target as u32;
+                self.pc -= 0x04;
+
                 self.xregs[dest] = tmp;
             }
 
@@ -92,42 +95,48 @@ impl CPU {
                     // BEQ
                     0b000 => {
                         if self.xregs[source1] == self.xregs[source2] {
-                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
+                            self.pc += immediate;
+                            self.pc -= 0x04;
                         }
                     }
 
                     // BNE
                     0b001 => {
                         if self.xregs[source1] != self.xregs[source2] {
-                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
+                            self.pc += immediate;
+                            self.pc -= 0x04;
                         }
                     }
 
                     // BLT
                     0b100 => {
                         if (self.xregs[source1] as i32) < (self.xregs[source2] as i32) {
-                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
+                            self.pc += immediate;
+                            self.pc -= 0x04;
                         }
                     }
 
                     // BGE
                     0b101 => {
                         if (self.xregs[source1] as i32) >= (self.xregs[source2] as i32) {
-                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
+                            self.pc += immediate;
+                            self.pc -= 0x04;
                         }
                     }
 
                     // BLTU
                     0b110 => {
                         if self.xregs[source1] < self.xregs[source2] {
-                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
+                            self.pc += immediate;
+                            self.pc -= 0x04;
                         }
                     }
 
                     // BGEU
                     0b111 => {
                         if self.xregs[source1] >= self.xregs[source2] {
-                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
+                            self.pc += immediate;
+                            self.pc -= 0x04;
                         }
                     }
 
@@ -138,7 +147,7 @@ impl CPU {
             // LOAD
             0b0000011 => {
                 let offset = ((instruction as i32) >> 20) as u32;
-                let address = self.xregs[source1].wrapping_add(offset);
+                let address = self.xregs[source1] + offset;
 
                 match funct3 {
                     // LB
@@ -179,7 +188,7 @@ impl CPU {
             0b0100011 => {
                 let offset = (((instruction & 0xFE000000) as i32 >> 20) as u32)
                     | ((instruction >> 7) & 0x1F);
-                let address = self.xregs[source1].wrapping_add(offset);
+                let address = self.xregs[source1] + offset;
 
                 match funct3 {
                     // SB
@@ -209,7 +218,7 @@ impl CPU {
                 match funct3 {
                     // ADDI
                     0b000 => {
-                        self.xregs[dest] = self.xregs[source1].wrapping_add(immediate);
+                        self.xregs[dest] = self.xregs[source1] + immediate;
                     }
 
                     // SLLI
@@ -277,12 +286,12 @@ impl CPU {
                 match (funct3, funct7) {
                     // ADD
                     (0b000, 0b0000000) => {
-                        self.xregs[dest] = self.xregs[source1].wrapping_add(self.xregs[source2]);
+                        self.xregs[dest] = self.xregs[source1] + self.xregs[source2];
                     }
 
                     // SUB
                     (0b000, 0b0100000) => {
-                        self.xregs[dest] = self.xregs[source1].wrapping_sub(self.xregs[source2]);
+                        self.xregs[dest] = self.xregs[source1] - self.xregs[source2];
                     }
 
                     // SLL
@@ -340,29 +349,28 @@ impl CPU {
 
                     // MUL
                     (0b000, 0b0000001) => {
-                        self.xregs[dest] = (self.xregs[source1] as i32)
-                            .wrapping_mul(self.xregs[source2] as i32)
-                            as u32;
+                        self.xregs[dest] =
+                            ((self.xregs[source1] as i32) * (self.xregs[source2] as i32)) as u32;
                     }
 
                     // MULH
                     (0b001, 0b0000001) => {
                         self.xregs[dest] = ((self.xregs[source1] as i32 as i64)
-                            .wrapping_mul(self.xregs[source2] as i32 as i64)
+                            * (self.xregs[source2] as i32 as i64)
                             >> 32) as u32;
                     }
 
                     // MULHSU
                     (0b010, 0b0000001) => {
                         self.xregs[dest] = ((self.xregs[source1] as i32 as u64)
-                            .wrapping_mul(self.xregs[source2] as u64)
+                            * (self.xregs[source2] as u64)
                             >> 32) as u32;
                     }
 
                     // MULHU
                     (0b011, 0b0000001) => {
                         self.xregs[dest] = ((self.xregs[source1] as u64)
-                            .wrapping_mul(self.xregs[source2] as u64)
+                            * (self.xregs[source2] as u64)
                             >> 32) as u32;
                     }
 
@@ -377,7 +385,7 @@ impl CPU {
                         } else if dividend == i32::MIN && divisor == -1 {
                             dividend as u32 // overflow
                         } else {
-                            dividend.wrapping_div(divisor) as u32
+                            (dividend / divisor) as u32
                         }
                     }
 
@@ -390,7 +398,7 @@ impl CPU {
                             self.csrs[0x03] |= 1 << 3; // set the DZ flag
                             u32::MAX // division by zero
                         } else {
-                            dividend.wrapping_div(divisor)
+                            dividend / divisor
                         }
                     }
 
@@ -404,7 +412,7 @@ impl CPU {
                         } else if dividend == i32::MIN && divisor == -1 {
                             0 // overflow
                         } else {
-                            dividend.wrapping_rem(divisor) as u32
+                            (dividend % divisor) as u32
                         }
                     }
 
@@ -416,7 +424,7 @@ impl CPU {
                         self.xregs[dest] = if divisor == 0 {
                             dividend // division by zero
                         } else {
-                            dividend.wrapping_rem(divisor)
+                            dividend % divisor
                         }
                     }
 
