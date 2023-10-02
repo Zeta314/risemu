@@ -12,6 +12,7 @@ impl Emulator {
     pub fn new(ram_size: usize) -> Self {
         let mut cpu = CPU {
             xregs: [0x00; 32],
+            csrs: [0x00; 4096],
             pc: 0x00,
             bus: Bus {
                 dram: DRAM::new(ram_size),

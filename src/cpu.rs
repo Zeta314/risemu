@@ -8,6 +8,7 @@ pub type Instruction = u32;
 
 pub struct CPU {
     pub xregs: [Register; 32],
+    pub csrs: [Register; 4096],
     pub pc: Register,
     pub bus: Bus,
 }
@@ -15,7 +16,10 @@ pub struct CPU {
 impl CPU {
     pub fn fetch_and_execute(&mut self) -> Result<(), RVException> {
         self.xregs[0] = 0x00; // hardwire x0 to be zero
+        self.csrs[0xC00] += 1; // increment the cycles CSR
+        self.csrs[0xC01] += 1; // increment the time CSR
 
+        // fetch & execute the instruction
         let instruction = self.fetch()?;
         self.execute(instruction)?;
         self.pc += 4;
@@ -368,6 +372,7 @@ impl CPU {
                         let divisor = self.xregs[source2] as i32;
 
                         self.xregs[dest] = if divisor == 0 {
+                            self.csrs[0x03] |= 1 << 3; // set the DZ flag
                             u32::MAX // division by zero
                         } else if dividend == i32::MIN && divisor == -1 {
                             dividend as u32 // overflow
@@ -382,6 +387,7 @@ impl CPU {
                         let divisor = self.xregs[source2];
 
                         self.xregs[dest] = if divisor == 0 {
+                            self.csrs[0x03] |= 1 << 3; // set the DZ flag
                             u32::MAX // division by zero
                         } else {
                             dividend.wrapping_div(divisor)
@@ -427,6 +433,57 @@ impl CPU {
                     // Zifencei
                     // FENCE.I
                     0b001 => {}
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // SYSTEM
+            0b1110011 => {
+                let target_csr = ((instruction >> 20) & 0xFFF) as usize;
+
+                match funct3 {
+                    // Zicsr
+                    // CSRRW
+                    0b001 => {
+                        let tmp = self.csrs[target_csr];
+                        self.csrs[target_csr] = self.xregs[source1];
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // CSRRS
+                    0b010 => {
+                        let tmp = self.csrs[target_csr];
+                        self.csrs[target_csr] = tmp | self.xregs[source1];
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // CSRRC
+                    0b011 => {
+                        let tmp = self.csrs[target_csr];
+                        self.csrs[target_csr] = tmp & !self.xregs[source1];
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // CSRRWI
+                    0b101 => {
+                        self.xregs[dest] = self.csrs[target_csr];
+                        self.csrs[target_csr] = source1 as u32;
+                    }
+
+                    // CSRRSI
+                    0b110 => {
+                        let tmp = self.csrs[target_csr];
+                        self.csrs[target_csr] = tmp | (source1 as u32);
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // CSRRCI
+                    0b111 => {
+                        let tmp = self.csrs[target_csr];
+                        self.csrs[target_csr] = tmp & !(source1 as u32);
+                        self.xregs[dest] = tmp;
+                    }
 
                     _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
