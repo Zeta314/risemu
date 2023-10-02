@@ -2,6 +2,7 @@ use crate::{
     bus::{Bus, DRAM_BASE},
     cpu::CPU,
     dram::DRAM,
+    exception::RVException,
 };
 
 pub struct Emulator {
@@ -39,7 +40,12 @@ impl Emulator {
                 Ok(_) => {}
                 Err(ex) => {
                     println!("{ex:#?} @ {:#x}", self.cpu.pc);
-                    break;
+
+                    match ex {
+                        RVException::Breakpoint => {}
+                        RVException::EnvironmentCall => {}
+                        _ => break,
+                    }
                 }
             }
 

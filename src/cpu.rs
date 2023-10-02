@@ -441,8 +441,26 @@ impl CPU {
             // SYSTEM
             0b1110011 => {
                 let target_csr = ((instruction >> 20) & 0xFFF) as usize;
+                let funct12 = ((instruction as i32) >> 20) as u32;
 
                 match funct3 {
+                    0b000 => {
+                        match funct12 {
+                            // ECALL
+                            0b000000000000 => {
+                                return Err(RVException::EnvironmentCall);
+                            }
+
+                            // EBREAK
+                            0b000000000001 => {
+                                return Err(RVException::EnvironmentCall);
+                            }
+
+                            _ => return Err(RVException::IllegalInstruction(instruction)),
+                        }
+                    }
+
+                    // =============================================================================
                     // Zicsr
                     // CSRRW
                     0b001 => {
