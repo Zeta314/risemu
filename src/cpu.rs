@@ -3,13 +3,10 @@ use crate::{
     exception::RVException,
 };
 
-pub type Register = u64;
-pub type Instruction = u32;
-
 pub struct CPU {
-    pub xregs: [Register; 32],
-    pub csrs: [Register; 4096],
-    pub pc: Register,
+    pub xregs: [u64; 32],
+    pub csrs: [u64; 4096],
+    pub pc: u64,
     pub bus: Bus,
 }
 
@@ -35,11 +32,11 @@ impl CPU {
         self.bus.write::<T>(address, value)
     }
 
-    fn fetch(&self) -> Result<Instruction, RVException> {
-        self.read::<Instruction>(self.pc)
+    fn fetch(&self) -> Result<u32, RVException> {
+        self.read::<u32>(self.pc)
     }
 
-    fn execute(&mut self, instruction: Instruction) -> Result<(), RVException> {
+    fn execute(&mut self, instruction: u32) -> Result<(), RVException> {
         let instruction = instruction as u64; // extend it for convenience
 
         let opcode = instruction & 0x7F;
