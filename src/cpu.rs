@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::{
     bus::{Address, Bus},
     exception::RVException,
@@ -8,12 +10,24 @@ pub struct CPU {
     pub csrs: [u64; 4096],
     pub pc: u64,
     pub bus: Bus,
+
+    time_update: Option<Instant>,
 }
 
 impl CPU {
+    pub fn new(bus: Bus) -> Self {
+        Self {
+            xregs: [0x00; 32],
+            csrs: [0x00; 4096],
+            pc: 0x00,
+            bus,
+
+            time_update: None,
+        }
+    }
+
     pub fn fetch_and_execute(&mut self) -> Result<(), RVException> {
-        self.xregs[0] = 0x00; // hardwire x0 to be zero
-        self.csrs[0xC00] += 1; // increment the cycles CSR
+        self.update();
 
         // fetch & execute the instruction
         let instruction = self.fetch()?;
@@ -21,6 +35,26 @@ impl CPU {
         self.pc += 4;
 
         Ok(())
+    }
+
+    fn update(&mut self) {
+        self.xregs[0] = 0x00; // hardwire x0 to be zero
+        self.csrs[0xC00] += 1; // increment the cycles CSR
+
+        // update the time CSR accordingly based on real-time
+        match self.time_update {
+            Some(ref mut time_update) => {
+                let diff = time_update.elapsed();
+                if diff.as_millis() >= 1000 {
+                    self.csrs[0xC01] += 1;
+                    self.time_update = Some(Instant::now());
+                }
+            }
+
+            None => {
+                self.time_update = Some(Instant::now());
+            }
+        }
     }
 
     fn read<T: Sized>(&self, address: Address) -> Result<T, RVException> {

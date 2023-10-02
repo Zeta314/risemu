@@ -11,14 +11,9 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn new(ram_size: usize) -> Self {
-        let mut cpu = CPU {
-            xregs: [0x00; 32],
-            csrs: [0x00; 4096],
-            pc: 0x00,
-            bus: Bus {
-                dram: DRAM::new(ram_size),
-            },
-        };
+        let mut cpu = CPU::new(Bus {
+            dram: DRAM::new(ram_size),
+        });
 
         // set the stack pointer to the end of DRAM
         cpu.xregs[2] = DRAM_BASE + (ram_size as u64);
