@@ -14,7 +14,6 @@ impl CPU {
     pub fn fetch_and_execute(&mut self) -> Result<(), RVException> {
         self.xregs[0] = 0x00; // hardwire x0 to be zero
         self.csrs[0xC00] += 1; // increment the cycles CSR
-        self.csrs[0xC01] += 1; // increment the time CSR
 
         // fetch & execute the instruction
         let instruction = self.fetch()?;
