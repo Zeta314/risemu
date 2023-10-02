@@ -3,7 +3,7 @@ use crate::{
     exception::RVException,
 };
 
-pub type Register = u32;
+pub type Register = u64;
 pub type Instruction = u32;
 
 pub struct CPU {
@@ -40,6 +40,8 @@ impl CPU {
     }
 
     fn execute(&mut self, instruction: Instruction) -> Result<(), RVException> {
+        let instruction = instruction as u64; // extend it for convenience
+
         let opcode = instruction & 0x7F;
         let funct3 = (instruction & 0x00007000) >> 12;
         let funct7 = (instruction & 0xFE000000) >> 25;
@@ -63,10 +65,10 @@ impl CPU {
             0b1101111 => {
                 self.xregs[dest] = self.pc + 0x04;
 
-                let offset = ((instruction & 0x80000000) as i32 >> 11) as u32
-                    | (instruction & 0xff000)
+                let offset = ((instruction & 0x80000000) as i32 as i64 >> 11) as u64
+                    | (instruction & 0xFF000)
                     | ((instruction >> 9) & 0x800)
-                    | ((instruction >> 20) & 0x7fe);
+                    | ((instruction >> 20) & 0x7FE);
 
                 self.pc += offset;
                 self.pc -= 0x04;
@@ -75,10 +77,10 @@ impl CPU {
             // JALR
             0b1100111 => {
                 let tmp = self.pc.wrapping_add(0x04);
-                let offset = (instruction as i32) >> 20;
-                let target = ((self.xregs[source1] as i32).wrapping_add(offset)) & !0x01;
+                let offset = (instruction as i32 as i64) >> 20;
+                let target = ((self.xregs[source1] as i64) + offset) & !0x01;
 
-                self.pc = target as u32;
+                self.pc = target as u64;
                 self.pc -= 0x04;
 
                 self.xregs[dest] = tmp;
@@ -86,10 +88,10 @@ impl CPU {
 
             // BRANCH
             0b1100011 => {
-                let immediate = ((instruction & 0x80000000) as i32 >> 19) as u32
+                let immediate = ((instruction & 0x80000000) as i32 as i64 >> 19) as u64
                     | ((instruction & 0x80) << 4)
-                    | ((instruction >> 20) & 0x7e0)
-                    | ((instruction >> 7) & 0x1e);
+                    | ((instruction >> 20) & 0x7E0)
+                    | ((instruction >> 7) & 0x1E);
 
                 match funct3 {
                     // BEQ
@@ -110,7 +112,7 @@ impl CPU {
 
                     // BLT
                     0b100 => {
-                        if (self.xregs[source1] as i32) < (self.xregs[source2] as i32) {
+                        if (self.xregs[source1] as i64) < (self.xregs[source2] as i64) {
                             self.pc += immediate;
                             self.pc -= 0x04;
                         }
@@ -118,7 +120,7 @@ impl CPU {
 
                     // BGE
                     0b101 => {
-                        if (self.xregs[source1] as i32) >= (self.xregs[source2] as i32) {
+                        if (self.xregs[source1] as i64) >= (self.xregs[source2] as i64) {
                             self.pc += immediate;
                             self.pc -= 0x04;
                         }
@@ -140,53 +142,65 @@ impl CPU {
                         }
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
                 }
             }
 
             // LOAD
             0b0000011 => {
-                let offset = ((instruction as i32) >> 20) as u32;
+                let offset = ((instruction as i32 as i64) >> 20) as u64;
                 let address = self.xregs[source1] + offset;
 
                 match funct3 {
                     // LB
                     0b000 => {
                         let value = self.read::<i8>(address)?;
-                        self.xregs[dest] = value as i32 as u32;
+                        self.xregs[dest] = value as i64 as u64;
                     }
 
                     // LH
                     0b001 => {
                         let value = self.read::<i16>(address)?;
-                        self.xregs[dest] = value as i32 as u32;
+                        self.xregs[dest] = value as i64 as u64;
                     }
 
                     // LW
                     0b010 => {
                         let value = self.read::<i32>(address)?;
-                        self.xregs[dest] = value as u32;
+                        self.xregs[dest] = value as i64 as u64;
+                    }
+
+                    // LD
+                    0b011 => {
+                        let value = self.read::<i64>(address)?;
+                        self.xregs[dest] = value as u64;
                     }
 
                     // LBU
                     0b100 => {
                         let value = self.read::<u8>(address)?;
-                        self.xregs[dest] = value as u32;
+                        self.xregs[dest] = value as u64;
                     }
 
                     // LHU
                     0b101 => {
                         let value = self.read::<u16>(address)?;
-                        self.xregs[dest] = value as u32;
+                        self.xregs[dest] = value as u64;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    // LWU
+                    0b110 => {
+                        let value = self.read::<u32>(address)?;
+                        self.xregs[dest] = value as u64;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
                 }
             }
 
             // STORE
             0b0100011 => {
-                let offset = (((instruction & 0xFE000000) as i32 >> 20) as u32)
+                let offset = (((instruction & 0xFE000000) as i32 as i64 >> 20) as u64)
                     | ((instruction >> 7) & 0x1F);
                 let address = self.xregs[source1] + offset;
 
@@ -206,13 +220,18 @@ impl CPU {
                         self.write::<u32>(address, self.xregs[source2] as u32)?;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    // SD
+                    0b011 => {
+                        self.write::<u64>(address, self.xregs[source2] as u64)?;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
                 }
             }
 
             // IMMEDIATE
             0b0010011 => {
-                let immediate = ((instruction as i32) >> 20) as u32;
+                let immediate = ((instruction as i32 as i64) >> 20) as u64;
                 let funct6 = funct7 >> 1;
 
                 match funct3 {
@@ -229,7 +248,7 @@ impl CPU {
 
                     // SLTI
                     0b010 => {
-                        self.xregs[dest] = if (self.xregs[source1] as i32) < (immediate as i32) {
+                        self.xregs[dest] = if (self.xregs[source1] as i64) < (immediate as i64) {
                             1
                         } else {
                             0
@@ -260,10 +279,10 @@ impl CPU {
                             }
 
                             0x10 => {
-                                self.xregs[dest] = ((self.xregs[source1] as i32) >> shift) as u32;
+                                self.xregs[dest] = ((self.xregs[source1] as i64) >> shift) as u64;
                             }
 
-                            _ => return Err(RVException::IllegalInstruction(instruction)),
+                            _ => return Err(RVException::IllegalInstruction(instruction as _)),
                         }
                     }
 
@@ -277,13 +296,49 @@ impl CPU {
                         self.xregs[dest] = self.xregs[source1] & immediate;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                }
+            }
+
+            // IMMEDIATE32
+            0b0011011 => {
+                let immediate = ((instruction as i32 as i64) >> 20) as u64;
+                let shift = (immediate & 0x1F) as u32;
+
+                match funct3 {
+                    // ADDIW
+                    0b000 => {
+                        self.xregs[dest] = (self.xregs[source1] + immediate) as i32 as i64 as u64;
+                    }
+
+                    // SLLIW
+                    0b001 => {
+                        self.xregs[dest] = (self.xregs[source1] << shift) as i32 as i64 as u64;
+                    }
+
+                    // SRLIW & SRAIW
+                    0b101 => match funct7 {
+                        0b000000 => {
+                            self.xregs[dest] = (self.xregs[source1] as u32 >> shift) as i64 as u64;
+                        }
+
+                        0b100000 => {
+                            self.xregs[dest] = (self.xregs[source1] as i32 >> shift) as i64 as u64;
+                        }
+
+                        _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    },
+
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
                 }
             }
 
             // OPERATION
             0b0110011 => {
                 match (funct3, funct7) {
+                    // =============================================================================
+                    // RV64I
+
                     // ADD
                     (0b000, 0b0000000) => {
                         self.xregs[dest] = self.xregs[source1] + self.xregs[source2];
@@ -302,7 +357,7 @@ impl CPU {
                     // SLT
                     (0b010, 0b0000000) => {
                         self.xregs[dest] =
-                            if (self.xregs[source1] as i32) < (self.xregs[source2] as i32) {
+                            if (self.xregs[source1] as i64) < (self.xregs[source2] as i64) {
                                 1
                             } else {
                                 0
@@ -331,7 +386,7 @@ impl CPU {
                     // SRA
                     (0b101, 0b0100000) => {
                         self.xregs[dest] =
-                            ((self.xregs[source1] as i32) >> (self.xregs[source2] & 0x3F)) as u32;
+                            ((self.xregs[source1] as i64) >> (self.xregs[source2] & 0x3F)) as u64;
                     }
 
                     // OR
@@ -345,47 +400,47 @@ impl CPU {
                     }
 
                     // =============================================================================
-                    // RV32M
+                    // RV64M
 
                     // MUL
                     (0b000, 0b0000001) => {
                         self.xregs[dest] =
-                            ((self.xregs[source1] as i32) * (self.xregs[source2] as i32)) as u32;
+                            ((self.xregs[source1] as i64) * (self.xregs[source2] as i64)) as u64;
                     }
 
                     // MULH
                     (0b001, 0b0000001) => {
-                        self.xregs[dest] = ((self.xregs[source1] as i32 as i64)
-                            * (self.xregs[source2] as i32 as i64)
-                            >> 32) as u32;
+                        self.xregs[dest] = ((self.xregs[source1] as i64 as i128)
+                            * (self.xregs[source2] as i64 as i128)
+                            >> 64) as u64;
                     }
 
                     // MULHSU
                     (0b010, 0b0000001) => {
-                        self.xregs[dest] = ((self.xregs[source1] as i32 as u64)
-                            * (self.xregs[source2] as u64)
-                            >> 32) as u32;
+                        self.xregs[dest] = ((self.xregs[source1] as i64 as u128)
+                            * (self.xregs[source2] as u128)
+                            >> 64) as u64;
                     }
 
                     // MULHU
                     (0b011, 0b0000001) => {
-                        self.xregs[dest] = ((self.xregs[source1] as u64)
-                            * (self.xregs[source2] as u64)
-                            >> 32) as u32;
+                        self.xregs[dest] = ((self.xregs[source1] as u128)
+                            * (self.xregs[source2] as u128)
+                            >> 64) as u64;
                     }
 
                     // DIV
                     (0b100, 0b0000001) => {
-                        let dividend = self.xregs[source1] as i32;
-                        let divisor = self.xregs[source2] as i32;
+                        let dividend = self.xregs[source1] as i64;
+                        let divisor = self.xregs[source2] as i64;
 
                         self.xregs[dest] = if divisor == 0 {
                             self.csrs[0x03] |= 1 << 3; // set the DZ flag
-                            u32::MAX // division by zero
-                        } else if dividend == i32::MIN && divisor == -1 {
-                            dividend as u32 // overflow
+                            u64::MAX // division by zero
+                        } else if dividend == i64::MIN && divisor == -1 {
+                            dividend as u64 // overflow
                         } else {
-                            (dividend / divisor) as u32
+                            (dividend / divisor) as u64
                         }
                     }
 
@@ -396,7 +451,7 @@ impl CPU {
 
                         self.xregs[dest] = if divisor == 0 {
                             self.csrs[0x03] |= 1 << 3; // set the DZ flag
-                            u32::MAX // division by zero
+                            u64::MAX // division by zero
                         } else {
                             dividend / divisor
                         }
@@ -404,15 +459,15 @@ impl CPU {
 
                     // REM
                     (0b110, 0b0000001) => {
-                        let dividend = self.xregs[source1] as i32;
-                        let divisor = self.xregs[source2] as i32;
+                        let dividend = self.xregs[source1] as i64;
+                        let divisor = self.xregs[source2] as i64;
 
                         self.xregs[dest] = if divisor == 0 {
-                            dividend as u32 // division by zero
-                        } else if dividend == i32::MIN && divisor == -1 {
+                            dividend as u64 // division by zero
+                        } else if dividend == i64::MIN && divisor == -1 {
                             0 // overflow
                         } else {
-                            (dividend % divisor) as u32
+                            (dividend % divisor) as u64
                         }
                     }
 
@@ -428,9 +483,109 @@ impl CPU {
                         }
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
                 }
             }
+
+            // OPERATION32
+            0b111011 => match (funct3, funct7) {
+                // =============================================================================
+                // RV64I
+
+                // ADDW
+                (0b000, 0b0000000) => {
+                    self.xregs[dest] =
+                        (self.xregs[source1] + self.xregs[source2]) as i32 as i64 as u64;
+                }
+
+                // SUBW
+                (0b000, 0b0100000) => {
+                    self.xregs[dest] = (self.xregs[source1] - self.xregs[source2]) as i32 as u64;
+                }
+
+                // SLLW
+                (0b001, 0b0000000) => {
+                    self.xregs[dest] =
+                        (self.xregs[source1] << (self.xregs[source2] & 0x3F)) as i32 as i64 as u64;
+                }
+
+                // SRLW
+                (0b101, 0b0000000) => {
+                    self.xregs[dest] = (self.xregs[source1] as u32 >> (self.xregs[source2] & 0x1F))
+                        as i32 as i64 as u64;
+                }
+
+                // SRAW
+                (0b101, 0b0100000) => {
+                    self.xregs[dest] =
+                        (self.xregs[source1] as i32 >> (self.xregs[source2] & 0x1F)) as i64 as u64;
+                }
+
+                // =================================================================================
+                // RV64M
+
+                // MULW
+                (0b000, 0b0000001) => {
+                    self.xregs[dest] =
+                        ((self.xregs[source1] as i32) * (self.xregs[source2] as i32)) as i64 as u64;
+                }
+
+                // DIVW
+                (0b100, 0b0000001) => {
+                    let dividend = self.xregs[source1] as i32;
+                    let divisor = self.xregs[source2] as i32;
+
+                    self.xregs[dest] = if divisor == 0 {
+                        self.csrs[0x03] |= 1 << 3; // set the DZ flag
+                        u64::MAX // division by zero
+                    } else if dividend == i32::MIN && divisor == -1 {
+                        dividend as i64 as u64 // overflow
+                    } else {
+                        (dividend / divisor) as i64 as u64
+                    }
+                }
+
+                // DIVUW
+                (0b101, 0b0000001) => {
+                    let dividend = self.xregs[source1] as u32;
+                    let divisor = self.xregs[source2] as u32;
+
+                    self.xregs[dest] = if divisor == 0 {
+                        self.csrs[0x03] |= 1 << 3; // set the DZ flag
+                        u64::MAX // division by zero
+                    } else {
+                        (dividend / divisor) as i32 as i64 as u64
+                    }
+                }
+
+                // REMW
+                (0b110, 0b0000001) => {
+                    let dividend = self.xregs[source1] as i32;
+                    let divisor = self.xregs[source2] as i32;
+
+                    self.xregs[dest] = if divisor == 0 {
+                        dividend as i64 as u64 // division by zero
+                    } else if dividend == i32::MIN && divisor == -1 {
+                        0 // overflow
+                    } else {
+                        (dividend % divisor) as i64 as u64
+                    }
+                }
+
+                // REMUW
+                (0b111, 0b0000001) => {
+                    let dividend = self.xregs[source1] as i32;
+                    let divisor = self.xregs[source2] as i32;
+
+                    self.xregs[dest] = if divisor == 0 {
+                        dividend as i32 as i64 as u64 // division by zero
+                    } else {
+                        (dividend % divisor) as i32 as i64 as u64
+                    }
+                }
+
+                _ => return Err(RVException::IllegalInstruction(instruction as _)),
+            },
 
             // MEM-MISC
             0b0001111 => {
@@ -442,14 +597,14 @@ impl CPU {
                     // FENCE.I
                     0b001 => {}
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
                 }
             }
 
             // SYSTEM
             0b1110011 => {
                 let target_csr = ((instruction >> 20) & 0xFFF) as usize;
-                let funct12 = ((instruction as i32) >> 20) as u32;
+                let funct12 = ((instruction as i64) >> 20) as u64;
 
                 match funct3 {
                     0b000 => {
@@ -464,7 +619,7 @@ impl CPU {
                                 return Err(RVException::EnvironmentCall);
                             }
 
-                            _ => return Err(RVException::IllegalInstruction(instruction)),
+                            _ => return Err(RVException::IllegalInstruction(instruction as _)),
                         }
                     }
 
@@ -494,28 +649,28 @@ impl CPU {
                     // CSRRWI
                     0b101 => {
                         self.xregs[dest] = self.csrs[target_csr];
-                        self.csrs[target_csr] = source1 as u32;
+                        self.csrs[target_csr] = source1 as u64;
                     }
 
                     // CSRRSI
                     0b110 => {
                         let tmp = self.csrs[target_csr];
-                        self.csrs[target_csr] = tmp | (source1 as u32);
+                        self.csrs[target_csr] = tmp | (source1 as u64);
                         self.xregs[dest] = tmp;
                     }
 
                     // CSRRCI
                     0b111 => {
                         let tmp = self.csrs[target_csr];
-                        self.csrs[target_csr] = tmp & !(source1 as u32);
+                        self.csrs[target_csr] = tmp & !(source1 as u64);
                         self.xregs[dest] = tmp;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
                 }
             }
 
-            _ => return Err(RVException::IllegalInstruction(instruction)),
+            _ => return Err(RVException::IllegalInstruction(instruction as _)),
         }
 
         Ok(())
