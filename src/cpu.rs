@@ -1,27 +1,31 @@
 use std::time::Instant;
 
 use crate::{
-    bus::{Address, Bus},
+    bus::{Address, Bus, Device, DRAM_BASE},
     exception::RVException,
 };
 
 pub struct CPU {
     pub xregs: [u64; 32],
     pub csrs: [u64; 4096],
-    pub pc: u64,
     pub bus: Bus,
-
+    pub pc: u64,
     time_update: Option<Instant>,
 }
 
 impl CPU {
     pub fn new(bus: Bus) -> Self {
-        Self {
-            xregs: [0x00; 32],
-            csrs: [0x00; 4096],
-            pc: 0x00,
-            bus,
+        let mut xregs = [0x00; 32];
+        let csrs = [0x00; 4096];
 
+        // set the stack pointer to the end of DRAM
+        xregs[2] = DRAM_BASE + (bus.dram.size() as u64);
+
+        Self {
+            xregs,
+            csrs,
+            bus,
+            pc: 0x00,
             time_update: None,
         }
     }
