@@ -5,11 +5,11 @@ use crate::{
     exception::RVException,
 };
 
-pub struct DRAM {
+pub struct RAM {
     memory: Vec<u8>,
 }
 
-impl DRAM {
+impl RAM {
     pub fn new(size: usize) -> Self {
         Self {
             memory: vec![0x00; size],
@@ -84,7 +84,7 @@ impl DRAM {
     }
 }
 
-impl Device for DRAM {
+impl Device for RAM {
     fn size(&self) -> usize {
         self.memory.len()
     }

@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use crate::{
-    bus::{Address, Bus, Device, DRAM_BASE},
+    bus::{Address, Bus, Device, RAM_BASE},
     exception::RVException,
 };
 
@@ -19,13 +19,13 @@ impl CPU {
         let csrs = [0x00; 4096];
 
         // set the stack pointer to the end of DRAM
-        xregs[2] = DRAM_BASE + (bus.dram.size() as u64);
+        xregs[2] = RAM_BASE + (bus.dram.size() as u64);
 
         Self {
             xregs,
             csrs,
             bus,
-            pc: DRAM_BASE,
+            pc: RAM_BASE,
             time_update: None,
         }
     }
