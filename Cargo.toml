@@ -1,5 +1,5 @@
 [package]
-name = "riscv-emu"
+name = "risemu"
 description = "RISC-V emulator written in rust"
 version = "0.1.0"
 edition = "2021"
