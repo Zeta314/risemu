@@ -1,4 +1,10 @@
-use crate::{bus::Bus, cpu::CPU, ram::RAM, exception::RVException, rom::ROM};
+use crate::{
+    bus::{Address, Bus},
+    cpu::CPU,
+    exception::RVException,
+    ram::RAM,
+    rom::ROM,
+};
 
 pub struct Emulator {
     pub cpu: CPU,
@@ -20,6 +26,10 @@ impl Emulator {
 
     pub fn init_dram(&mut self, data: Vec<u8>) {
         self.cpu.bus.dram.initialize(data);
+    }
+
+    pub fn set_pc(&mut self, value: Address) {
+        self.cpu.pc = value;
     }
 
     pub fn run(&mut self) {

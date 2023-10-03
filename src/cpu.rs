@@ -25,7 +25,7 @@ impl CPU {
             xregs,
             csrs,
             bus,
-            pc: RAM_BASE,
+            pc: 0x00,
             time_update: None,
         }
     }
