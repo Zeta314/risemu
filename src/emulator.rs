@@ -1,5 +1,5 @@
 use crate::{
-    bus::{Address, Bus},
+    bus::{Address, Bus, ROM_BASE},
     cpu::CPU,
     exception::RVException,
     ram::RAM,
@@ -22,6 +22,7 @@ impl Emulator {
 
     pub fn init_rom(&mut self, data: Vec<u8>) {
         self.cpu.bus.rom.initialize(data);
+        self.cpu.pc = ROM_BASE;
     }
 
     pub fn init_ram(&mut self, data: Vec<u8>) {
