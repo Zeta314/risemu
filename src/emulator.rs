@@ -24,6 +24,10 @@ impl Emulator {
         self.cpu.bus.rom.initialize(data);
     }
 
+    pub fn init_ram(&mut self, data: Vec<u8>) {
+        self.cpu.bus.ram.initialize(data);
+    }
+
     pub fn set_pc(&mut self, value: Address) {
         self.cpu.pc = value;
     }
