@@ -31,12 +31,12 @@ impl CPU {
     }
 
     pub fn fetch_and_execute(&mut self) -> Result<(), RVException> {
-        self.update();
-
         // fetch & execute the instruction
         let instruction = self.fetch()?;
         self.execute(instruction)?;
         self.pc += 4;
+
+        self.update();
 
         Ok(())
     }

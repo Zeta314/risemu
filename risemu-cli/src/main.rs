@@ -1,7 +1,7 @@
 use std::fs;
 
 use clap::Parser;
-use risemu::emulator::Emulator;
+use risemu::{emulator::Emulator, bus::ROM_BASE};
 
 use crate::args::CLIArgs;
 
@@ -13,6 +13,7 @@ fn main() {
     
     let rom_data = fs::read(args.program).expect("failed to read ROM file");
     emulator.init_rom(rom_data);
+    emulator.set_pc(ROM_BASE);
 
     if let Some(ram_file) = args.ram {
         let ram_data = fs::read(ram_file).expect("failed to read RAM file");
