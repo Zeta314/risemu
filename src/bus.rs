@@ -12,14 +12,14 @@ pub trait Device {
 }
 
 pub struct Bus {
-    pub dram: RAM,
+    pub ram: RAM,
     pub rom: ROM,
 }
 
 impl Bus {
     pub fn read<T: Sized>(&self, address: Address) -> Result<T, RVException> {
-        if address >= RAM_BASE && address < (RAM_BASE + self.dram.size() as Address) {
-            return self.dram.read::<T>(address - RAM_BASE);
+        if address >= RAM_BASE && address < (RAM_BASE + self.ram.size() as Address) {
+            return self.ram.read::<T>(address - RAM_BASE);
         }
 
         if address >= ROM_BASE && address < (ROM_BASE + self.rom.size() as Address) {
@@ -30,8 +30,8 @@ impl Bus {
     }
 
     pub fn write<T: Sized>(&mut self, address: Address, value: T) -> Result<(), RVException> {
-        if address >= RAM_BASE && address < (RAM_BASE + self.dram.size() as Address) {
-            return self.dram.write::<T>(address - RAM_BASE, value);
+        if address >= RAM_BASE && address < (RAM_BASE + self.ram.size() as Address) {
+            return self.ram.write::<T>(address - RAM_BASE, value);
         }
 
         Err(RVException::StoreAccessFault)

@@ -18,8 +18,8 @@ impl CPU {
         let mut xregs = [0x00; 32];
         let csrs = [0x00; 4096];
 
-        // set the stack pointer to the end of DRAM
-        xregs[2] = RAM_BASE + (bus.dram.size() as u64);
+        // set the stack pointer to the end of RAM
+        xregs[2] = RAM_BASE + (bus.ram.size() as u64);
 
         Self {
             xregs,

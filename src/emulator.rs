@@ -13,7 +13,7 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(rom_size: usize, ram_size: usize) -> Self {
         let bus = Bus {
-            dram: RAM::new(ram_size),
+            ram: RAM::new(ram_size),
             rom: ROM::new(rom_size),
         };
 
@@ -24,8 +24,8 @@ impl Emulator {
         self.cpu.bus.rom.initialize(data);
     }
 
-    pub fn init_dram(&mut self, data: Vec<u8>) {
-        self.cpu.bus.dram.initialize(data);
+    pub fn init_ram(&mut self, data: Vec<u8>) {
+        self.cpu.bus.ram.initialize(data);
     }
 
     pub fn set_pc(&mut self, value: Address) {
