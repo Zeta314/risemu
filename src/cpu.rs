@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{cmp, time::Instant};
 
 use crate::{
     bus::{Address, Bus, Device, RAM_BASE},
@@ -10,7 +10,9 @@ pub struct CPU {
     pub csrs: [u64; 4096],
     pub bus: Bus,
     pub pc: u64,
+
     time_update: Option<Instant>,
+    reservation_set: Vec<u64>,
 }
 
 impl CPU {
@@ -27,6 +29,7 @@ impl CPU {
             bus,
             pc: 0x00,
             time_update: None,
+            reservation_set: vec![],
         }
     }
 
@@ -66,6 +69,12 @@ impl CPU {
     }
 
     fn write<T: Sized>(&mut self, address: Address, value: T) -> Result<(), RVException> {
+        // the SC must fail if a write from some other device to the bytes
+        // accessed by the LR can be observed to occur between the LR and SC.
+        if self.reservation_set.contains(&address) {
+            self.reservation_set.retain(|&x| x != address);
+        }
+
         self.bus.write::<T>(address, value)
     }
 
@@ -697,6 +706,299 @@ impl CPU {
                     0b111 => {
                         let tmp = self.csrs[target_csr];
                         self.csrs[target_csr] = tmp & !(source1 as u64);
+                        self.xregs[dest] = tmp;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                }
+            }
+
+            // ATOMIC
+            0b0101111 => {
+                let funct5 = (funct7 & 0b1111100) >> 2;
+
+                match (funct3, funct5) {
+                    // LR.W
+                    (0b010, 0b00010) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        self.xregs[dest] = self.read::<u32>(address)? as i32 as i64 as u64;
+                        self.reservation_set.push(address);
+                    }
+
+                    // LR.D
+                    (0b011, 0b00010) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        self.xregs[dest] = self.read::<u64>(address)?;
+                        self.reservation_set.push(address);
+                    }
+
+                    // SC.W
+                    (0b010, 0b00011) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        if self.reservation_set.contains(&address) {
+                            self.reservation_set.retain(|&x| x != address);
+                            self.write::<u32>(address, self.xregs[source2] as u32)?;
+                            self.xregs[dest] = 0x00;
+                        } else {
+                            self.reservation_set.retain(|&x| x != address);
+                            self.xregs[dest] = 0x01;
+                        }
+                    }
+
+                    // SC.D
+                    (0b011, 0b00011) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        if self.reservation_set.contains(&address) {
+                            self.reservation_set.retain(|&x| x != address);
+                            self.write::<u64>(address, self.xregs[source2])?;
+                            self.xregs[dest] = 0x00;
+                        } else {
+                            self.reservation_set.retain(|&x| x != address);
+                            self.xregs[dest] = 0x01;
+                        }
+                    }
+
+                    // AMOSWAP.W
+                    (0b010, 0b00001) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u32>(address)?;
+                        self.write::<u32>(address, self.xregs[source2] as u32)?;
+                        self.xregs[dest] = tmp as i32 as i64 as u64;
+                    }
+
+                    // AMOSWAP.D
+                    (0b011, 0b00001) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u64>(address)?;
+                        self.write::<u64>(address, self.xregs[source2])?;
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // AMOADD.W
+                    (0b010, 0b00000) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u32>(address)?;
+                        self.write::<u32>(address, (tmp as u64 + self.xregs[source2]) as u32)?;
+                        self.xregs[dest] = tmp as i32 as i64 as u64;
+                    }
+
+                    // AMOADD.D
+                    (0b011, 0b00000) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u64>(address)?;
+                        self.write::<u64>(address, tmp + self.xregs[source2])?;
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // AMOXOR.W
+                    (0b010, 0b00100) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<i32>(address)?;
+                        self.write::<u32>(address, (tmp ^ (self.xregs[source2] as i32)) as u32)?;
+                        self.xregs[dest] = tmp as i64 as u64;
+                    }
+
+                    // AMOXOR.D
+                    (0b011, 0b00100) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u64>(address)?;
+                        self.write::<u64>(address, tmp ^ self.xregs[source2])?;
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // AMOAND.W
+                    (0b010, 0b01100) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<i32>(address)?;
+                        self.write::<u32>(address, (tmp & (self.xregs[source2] as i32)) as u32)?;
+                        self.xregs[dest] = tmp as i64 as u64;
+                    }
+
+                    // AMOAND.D
+                    (0b011, 0b01100) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u64>(address)?;
+                        self.write::<u64>(address, tmp & self.xregs[source2])?;
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // AMOOR.W
+                    (0b010, 0b01000) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<i32>(address)?;
+                        self.write::<u32>(address, (tmp | (self.xregs[source2] as i32)) as u32)?;
+                        self.xregs[dest] = tmp as i64 as u64;
+                    }
+
+                    // AMOOR.D
+                    (0b011, 0b01000) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u64>(address)?;
+                        self.write::<u64>(address, tmp | self.xregs[source2])?;
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // AMOMIN.W
+                    (0b010, 0b10000) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<i32>(address)?;
+                        self.write::<u32>(
+                            address,
+                            cmp::min(tmp, self.xregs[source2] as i32) as u32,
+                        )?;
+                        self.xregs[dest] = tmp as i64 as u64;
+                    }
+
+                    // AMOMIN.D
+                    (0b011, 0b10000) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<i64>(address)?;
+                        self.write::<u64>(
+                            address,
+                            cmp::min(tmp, self.xregs[source2] as i64) as u64,
+                        )?;
+                        self.xregs[dest] = tmp as u64;
+                    }
+
+                    // AMOMAX.W
+                    (0b010, 0b10100) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<i32>(address)?;
+                        self.write::<u32>(
+                            address,
+                            cmp::max(tmp, self.xregs[source2] as i32) as u32,
+                        )?;
+                        self.xregs[dest] = tmp as i64 as u64;
+                    }
+
+                    // AMOMAX.D
+                    (0b011, 0b10100) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<i64>(address)?;
+                        self.write::<u64>(
+                            address,
+                            cmp::max(tmp, self.xregs[source2] as i64) as u64,
+                        )?;
+                        self.xregs[dest] = tmp as u64;
+                    }
+
+                    // AMOMINU.W
+                    (0b010, 0b11000) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u32>(address)?;
+                        self.write::<u32>(address, cmp::min(tmp, self.xregs[source2] as u32))?;
+                        self.xregs[dest] = tmp as i64 as u64;
+                    }
+
+                    // AMOMINU.D
+                    (0b011, 0b11000) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u64>(address)?;
+                        self.write::<u64>(address, cmp::min(tmp, self.xregs[source2]))?;
+                        self.xregs[dest] = tmp;
+                    }
+
+                    // AMOMAXU.W
+                    (0b010, 11100) => {
+                        let address = self.xregs[source1];
+                        if address % 4 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u32>(address)?;
+                        self.write::<u32>(address, cmp::max(tmp, self.xregs[source2] as u32))?;
+                        self.xregs[dest] = tmp as i64 as u64;
+                    }
+
+                    // AMOMAXU.D
+                    (0b011, 11100) => {
+                        let address = self.xregs[source1];
+                        if address % 8 != 0 {
+                            return Err(RVException::LoadAddressMisaligned);
+                        }
+
+                        let tmp = self.read::<u64>(address)?;
+                        self.write::<u64>(address, cmp::max(tmp, self.xregs[source2]))?;
                         self.xregs[dest] = tmp;
                     }
 
