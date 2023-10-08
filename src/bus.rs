@@ -1,4 +1,4 @@
-use crate::{ram::RAM, exception::RVException, rom::ROM};
+use crate::{dram::DRAM, exception::RVException, rom::ROM};
 
 pub type Address = u64;
 
@@ -12,7 +12,7 @@ pub trait Device {
 }
 
 pub struct Bus {
-    pub ram: RAM,
+    pub ram: DRAM,
     pub rom: ROM,
 }
 

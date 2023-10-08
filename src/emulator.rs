@@ -2,7 +2,7 @@ use crate::{
     bus::{Address, Bus, ROM_BASE},
     cpu::CPU,
     exception::RVException,
-    ram::RAM,
+    dram::DRAM,
     rom::ROM,
 };
 
@@ -13,7 +13,7 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(rom_size: usize, ram_size: usize) -> Self {
         let bus = Bus {
-            ram: RAM::new(ram_size),
+            ram: DRAM::new(ram_size),
             rom: ROM::new(rom_size),
         };
 
