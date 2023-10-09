@@ -1,4 +1,4 @@
-use std::{cmp, time::Instant};
+use std::{cmp, num::FpCategory, time::Instant};
 
 use crate::{
     bus::{Address, Bus, Device, RAM_BASE},
@@ -7,6 +7,7 @@ use crate::{
 
 pub struct CPU {
     pub xregs: [u64; 32],
+    pub fregs: [f64; 32],
     pub csrs: [u64; 4096],
     pub bus: Bus,
     pub pc: u64,
@@ -18,6 +19,7 @@ pub struct CPU {
 impl CPU {
     pub fn new(bus: Bus) -> Self {
         let mut xregs = [0x00; 32];
+        let fregs = [0.00; 32];
         let csrs = [0x00; 4096];
 
         // set the stack pointer to the end of RAM
@@ -25,6 +27,7 @@ impl CPU {
 
         Self {
             xregs,
+            fregs,
             csrs,
             bus,
             pc: 0x00,
@@ -83,35 +86,35 @@ impl CPU {
     }
 
     fn execute(&mut self, instruction: u32) -> Result<(), RVException> {
-        let instruction = instruction as u64; // extend it for convenience
+        let _instruction = instruction as u64; // extend it for convenience
 
-        let opcode = instruction & 0x7F;
-        let funct3 = (instruction & 0x00007000) >> 12;
-        let funct7 = (instruction & 0xFE000000) >> 25;
+        let opcode = _instruction & 0x7F;
+        let funct3 = (_instruction & 0x00007000) >> 12;
+        let funct7 = (_instruction & 0xFE000000) >> 25;
 
-        let dest = ((instruction & 0xF80) >> 7) as usize;
-        let source1 = ((instruction & 0x000F8000) >> 15) as usize;
-        let source2 = ((instruction & 0x01F00000) >> 20) as usize;
+        let dest = ((_instruction & 0xF80) >> 7) as usize;
+        let source1 = ((_instruction & 0x000F8000) >> 15) as usize;
+        let source2 = ((_instruction & 0x01F00000) >> 20) as usize;
 
         match opcode {
             // LUI
             0b0110111 => {
-                self.xregs[dest] = instruction & 0xFFFFF000;
+                self.xregs[dest] = _instruction & 0xFFFFF000;
             }
 
             // AUIPC
             0b0010111 => {
-                self.xregs[dest] = self.pc + (instruction & 0xFFFFF000);
+                self.xregs[dest] = self.pc + (_instruction & 0xFFFFF000);
             }
 
             // JAL
             0b1101111 => {
                 self.xregs[dest] = self.pc + 0x04;
 
-                let offset = ((instruction & 0x80000000) as i32 as i64 >> 11) as u64
-                    | (instruction & 0xFF000)
-                    | ((instruction >> 9) & 0x800)
-                    | ((instruction >> 20) & 0x7FE);
+                let offset = ((_instruction & 0x80000000) as i32 as i64 >> 11) as u64
+                    | (_instruction & 0xFF000)
+                    | ((_instruction >> 9) & 0x800)
+                    | ((_instruction >> 20) & 0x7FE);
 
                 self.pc += offset;
                 self.pc -= 0x04;
@@ -120,7 +123,7 @@ impl CPU {
             // JALR
             0b1100111 => {
                 let tmp = self.pc.wrapping_add(0x04);
-                let offset = (instruction as i32 as i64) >> 20;
+                let offset = (_instruction as i32 as i64) >> 20;
                 let target = ((self.xregs[source1] as i64) + offset) & !0x01;
 
                 self.pc = target as u64;
@@ -131,10 +134,10 @@ impl CPU {
 
             // BRANCH
             0b1100011 => {
-                let immediate = ((instruction & 0x80000000) as i32 as i64 >> 19) as u64
-                    | ((instruction & 0x80) << 4)
-                    | ((instruction >> 20) & 0x7E0)
-                    | ((instruction >> 7) & 0x1E);
+                let immediate = ((_instruction & 0x80000000) as i32 as i64 >> 19) as u64
+                    | ((_instruction & 0x80) << 4)
+                    | ((_instruction >> 20) & 0x7E0)
+                    | ((_instruction >> 7) & 0x1E);
 
                 match funct3 {
                     // BEQ
@@ -185,13 +188,13 @@ impl CPU {
                         }
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
             // LOAD
             0b0000011 => {
-                let offset = ((instruction as i32 as i64) >> 20) as u64;
+                let offset = ((_instruction as i32 as i64) >> 20) as u64;
                 let address = self.xregs[source1] + offset;
 
                 match funct3 {
@@ -237,14 +240,14 @@ impl CPU {
                         self.xregs[dest] = value as u64;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
             // STORE
             0b0100011 => {
-                let offset = (((instruction & 0xFE000000) as i32 as i64 >> 20) as u64)
-                    | ((instruction >> 7) & 0x1F);
+                let offset = (((_instruction & 0xFE000000) as i32 as i64 >> 20) as u64)
+                    | ((_instruction >> 7) & 0x1F);
                 let address = self.xregs[source1] + offset;
 
                 match funct3 {
@@ -268,13 +271,13 @@ impl CPU {
                         self.write::<u64>(address, self.xregs[source2] as u64)?;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
             // IMMEDIATE
             0b0010011 => {
-                let immediate = ((instruction as i32 as i64) >> 20) as u64;
+                let immediate = ((_instruction as i32 as i64) >> 20) as u64;
                 let funct6 = funct7 >> 1;
 
                 match funct3 {
@@ -285,7 +288,7 @@ impl CPU {
 
                     // SLLI
                     0b001 => {
-                        let shift = (instruction >> 20) & 0x3F;
+                        let shift = (_instruction >> 20) & 0x3F;
                         self.xregs[dest] = self.xregs[source1] << shift;
                     }
 
@@ -314,7 +317,7 @@ impl CPU {
 
                     // SRLI & SRAI
                     0b101 => {
-                        let shift = (instruction >> 20) & 0x3F;
+                        let shift = (_instruction >> 20) & 0x3F;
 
                         match funct6 {
                             0x00 => {
@@ -325,7 +328,7 @@ impl CPU {
                                 self.xregs[dest] = ((self.xregs[source1] as i64) >> shift) as u64;
                             }
 
-                            _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                            _ => return Err(RVException::IllegalInstruction(instruction)),
                         }
                     }
 
@@ -339,13 +342,13 @@ impl CPU {
                         self.xregs[dest] = self.xregs[source1] & immediate;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
             // IMMEDIATE32
             0b0011011 => {
-                let immediate = ((instruction as i32 as i64) >> 20) as u64;
+                let immediate = ((_instruction as i32 as i64) >> 20) as u64;
                 let shift = (immediate & 0x1F) as u32;
 
                 match funct3 {
@@ -369,10 +372,10 @@ impl CPU {
                             self.xregs[dest] = (self.xregs[source1] as i32 >> shift) as i64 as u64;
                         }
 
-                        _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                        _ => return Err(RVException::IllegalInstruction(instruction)),
                     },
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
@@ -526,7 +529,7 @@ impl CPU {
                         }
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
@@ -627,8 +630,319 @@ impl CPU {
                     }
                 }
 
-                _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                _ => return Err(RVException::IllegalInstruction(instruction)),
             },
+
+            // =====================================================================================
+            // RV64F
+
+            // LOAD-FP
+            0b0000111 => {
+                let offset = ((_instruction as i32 as i64) >> 20) as u64;
+                let address = self.xregs[source1] + offset;
+
+                match funct3 {
+                    // RV64F
+                    // FLW
+                    0b010 => {
+                        self.fregs[dest] = f32::from_bits(self.read::<u32>(address)?) as f64;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // STORE-FP
+            0b0100111 => {
+                let offset = ((((_instruction as i32 as i64) >> 20) as u64) & 0xfe0)
+                    | ((_instruction >> 7) & 0x1f);
+                let address = self.xregs[source1] + offset;
+
+                match funct3 {
+                    // RV64F
+                    // FSW
+                    0b010 => {
+                        self.write::<u32>(address, (self.fregs[source2] as f32).to_bits())?;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // FMADD
+            0b1000011 => {
+                let source3 = ((_instruction & 0xf8000000) >> 27) as usize;
+                let funct2 = (_instruction & 0x03000000) >> 25;
+
+                match funct2 {
+                    // FMADD.S
+                    0b00 => {
+                        self.fregs[dest] =
+                            ((self.fregs[source1] as f32) * (self.fregs[source2] as f32)
+                                + (self.fregs[source3] as f32)) as f64;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // FMSUB
+            0b1000111 => {
+                let source3 = ((_instruction & 0xf8000000) >> 27) as usize;
+                let funct2 = (_instruction & 0x03000000) >> 25;
+
+                match funct2 {
+                    // FMSUB.S
+                    0b00 => {
+                        self.fregs[dest] =
+                            ((self.fregs[source1] as f32) * (self.fregs[source2] as f32)
+                                - (self.fregs[source3] as f32)) as f64;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // FNMADD
+            0b1001111 => {
+                let source3 = ((_instruction & 0xf8000000) >> 27) as usize;
+                let funct2 = (_instruction & 0x03000000) >> 25;
+
+                match funct2 {
+                    // FNMSUB.S
+                    0b00 => {
+                        self.fregs[dest] =
+                            ((-self.fregs[source1] as f32) * (self.fregs[source2] as f32)
+                                + (self.fregs[source3] as f32)) as f64;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // FNMSUB
+            0b1001011 => {
+                let source3 = ((_instruction & 0xf8000000) >> 27) as usize;
+                let funct2 = (_instruction & 0x03000000) >> 25;
+
+                match funct2 {
+                    // FNMSUB.S
+                    0b00 => {
+                        self.fregs[dest] =
+                            ((-self.fregs[source1] as f32) * (self.fregs[source2] as f32)
+                                - (self.fregs[source3] as f32)) as f64;
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // OP-FP
+            0b1010011 => {
+                // make sure that the FRM field is valid
+                match (self.csrs[0x003] & (1 << 8)) >> 5 {
+                    0b000 => {}
+                    0b001 => {}
+                    0b010 => {}
+                    0b011 => {}
+                    0b100 => {}
+                    0b111 => {}
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+
+                match funct7 {
+                    // FADD.S
+                    0b0000000 => {
+                        self.fregs[dest] =
+                            ((self.fregs[source1] as f32) + (self.fregs[source2] as f32)) as f64;
+                    }
+
+                    // FSUB.S
+                    0b0000100 => {
+                        self.fregs[dest] =
+                            ((self.fregs[source1] as f32) - (self.fregs[source2] as f32)) as f64;
+                    }
+
+                    // FMUL.S
+                    0b0001000 => {
+                        self.fregs[dest] =
+                            ((self.fregs[source1] as f32) * (self.fregs[source2] as f32)) as f64;
+                    }
+
+                    // FDIV.S
+                    0b0001100 => {
+                        self.fregs[dest] =
+                            ((self.fregs[source1] as f32) / (self.fregs[source2] as f32)) as f64;
+                    }
+
+                    // FSQRT.S
+                    0b0101100 => {
+                        self.fregs[dest] = (self.fregs[source1] as f32).sqrt() as f64;
+                    }
+
+                    0b0010000 => match funct3 {
+                        // FSGNJ.S
+                        0b000 => {
+                            self.fregs[dest] = self.fregs[source1].copysign(self.fregs[source2]);
+                        }
+
+                        // FSGNJN.S
+                        0b001 => {
+                            self.fregs[dest] = self.fregs[source1].copysign(-self.fregs[source2]);
+                        }
+
+                        // FSGNJX.S
+                        0b010 => {
+                            let sign1 = (self.fregs[source1] as f32).to_bits() & 0x80000000;
+                            let sign2 = (self.fregs[source2] as f32).to_bits() & 0x80000000;
+                            let other = (self.fregs[source1] as f32).to_bits() & 0x7fffffff;
+
+                            self.fregs[dest] = f32::from_bits((sign1 ^ sign2) | other) as f64;
+                        }
+
+                        _ => return Err(RVException::IllegalInstruction(instruction)),
+                    },
+
+                    0b0010100 => match funct3 {
+                        // FMIN.S
+                        0b000 => {
+                            self.fregs[dest] = self.fregs[source1].min(self.fregs[source2]);
+                        }
+
+                        // FMAX.S
+                        0b001 => {
+                            self.fregs[dest] = self.fregs[source1].max(self.fregs[source2]);
+                        }
+
+                        _ => return Err(RVException::IllegalInstruction(instruction)),
+                    },
+
+                    0b1100000 => match source2 {
+                        // FCVT.W.S
+                        0b00000 => {
+                            self.xregs[dest] = (self.fregs[source1] as f32).round() as i32 as u64;
+                        }
+
+                        // FCVT.WU.S
+                        0b00001 => {
+                            self.xregs[dest] =
+                                (self.fregs[source1] as f32).round() as u32 as i32 as u64;
+                        }
+
+                        // FCVT.L.S
+                        0b00010 => {
+                            self.xregs[dest] = (self.fregs[source1] as f32).round() as u64;
+                        }
+
+                        // FCVT.LU.S
+                        0b00011 => {
+                            self.xregs[dest] = (self.fregs[source1] as f32).round() as u64;
+                        }
+
+                        _ => return Err(RVException::IllegalInstruction(instruction)),
+                    },
+
+                    0b1110000 => match funct3 {
+                        // FMV.X.W
+                        0b000 => {
+                            self.xregs[dest] =
+                                (self.fregs[source1].to_bits() & 0xffffffff) as i32 as i64 as u64;
+                        }
+
+                        // FCLASS.S
+                        0b001 => {
+                            let tmp = self.fregs[source1];
+
+                            match tmp.classify() {
+                                FpCategory::Infinite => {
+                                    self.xregs[dest] = if tmp.is_sign_negative() { 0 } else { 7 }
+                                }
+
+                                FpCategory::Normal => {
+                                    self.xregs[dest] = if tmp.is_sign_negative() { 1 } else { 6 }
+                                }
+
+                                FpCategory::Subnormal => {
+                                    self.xregs[dest] = if tmp.is_sign_negative() { 2 } else { 5 }
+                                }
+
+                                FpCategory::Zero => {
+                                    self.xregs[dest] = if tmp.is_sign_negative() { 3 } else { 4 }
+                                }
+
+                                FpCategory::Nan => self.xregs[dest] = 9,
+                            }
+                        }
+
+                        _ => return Err(RVException::IllegalInstruction(instruction)),
+                    },
+
+                    0b1010000 => match funct3 {
+                        // FLE.S
+                        0b000 => {
+                            self.xregs[dest] = if self.fregs[source1] <= self.fregs[source2] {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+
+                        // FLT.S
+                        0b001 => {
+                            self.xregs[dest] = if self.fregs[source1] < self.fregs[source2] {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+
+                        // FEQ.S
+                        0b010 => {
+                            self.xregs[dest] = if self.fregs[source1] == self.fregs[source2] {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+
+                        _ => return Err(RVException::IllegalInstruction(instruction)),
+                    },
+
+                    0b1101000 => match source2 {
+                        // FCVT.S.W
+                        0b00000 => {
+                            self.fregs[dest] = self.xregs[source1] as i32 as f32 as f64;
+                        }
+
+                        // FCVT.S.WU
+                        0b00001 => {
+                            self.fregs[dest] = self.xregs[source1] as u32 as f32 as f64;
+                        }
+
+                        // FCVT.S.L
+                        0b00010 => {
+                            self.fregs[dest] = self.xregs[source1] as f32 as f64;
+                        }
+
+                        // FCVT.SU.L
+                        0b00011 => {
+                            self.fregs[dest] = self.xregs[source1] as u64 as f32 as f64;
+                        }
+
+                        _ => return Err(RVException::IllegalInstruction(instruction)),
+                    },
+
+                    // FMV.W.X
+                    0b1111000 => {
+                        self.fregs[dest] = f64::from_bits(self.xregs[source1] & 0xffffffff);
+                    }
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
+            // =====================================================================================
 
             // MEM-MISC
             0b0001111 => {
@@ -640,14 +954,14 @@ impl CPU {
                     // FENCE.I
                     0b001 => {}
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
             // SYSTEM
             0b1110011 => {
-                let target_csr = ((instruction >> 20) & 0xFFF) as usize;
-                let funct12 = ((instruction as i64) >> 20) as u64;
+                let target_csr = ((_instruction >> 20) & 0xFFF) as usize;
+                let funct12 = ((_instruction as i64) >> 20) as u64;
 
                 match funct3 {
                     0b000 => {
@@ -659,10 +973,10 @@ impl CPU {
 
                             // EBREAK
                             0b000000000001 => {
-                                return Err(RVException::EnvironmentCall);
+                                return Err(RVException::Breakpoint);
                             }
 
-                            _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                            _ => return Err(RVException::IllegalInstruction(instruction)),
                         }
                     }
 
@@ -709,10 +1023,11 @@ impl CPU {
                         self.xregs[dest] = tmp;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
+            // RV64A
             // ATOMIC
             0b0101111 => {
                 let funct5 = (funct7 & 0b1111100) >> 2;
@@ -1002,11 +1317,11 @@ impl CPU {
                         self.xregs[dest] = tmp;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction as _)),
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
                 }
             }
 
-            _ => return Err(RVException::IllegalInstruction(instruction as _)),
+            _ => return Err(RVException::IllegalInstruction(instruction)),
         }
 
         Ok(())
