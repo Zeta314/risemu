@@ -599,6 +599,19 @@ impl CPU {
                 }
             }
 
+            // SYSTEM
+            0b1110011 => {
+                match source2 {
+                    // ECALL
+                    0b000000000000 => return Err(RVException::EnvironmentCall),
+
+                    // EBREAK
+                    0b000000000001 => return Err(RVException::Breakpoint),
+
+                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                }
+            }
+
             _ => return Err(RVException::IllegalInstruction(instruction)),
         }
 
