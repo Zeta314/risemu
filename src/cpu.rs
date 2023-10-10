@@ -148,7 +148,7 @@ impl CPU {
                         }
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
@@ -200,7 +200,7 @@ impl CPU {
                         self.xregs[dest] = value as u64;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
@@ -231,7 +231,7 @@ impl CPU {
                         self.write::<u64>(address, self.xregs[source2] as u64)?;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
@@ -288,7 +288,7 @@ impl CPU {
                                 self.xregs[dest] = ((self.xregs[source1] as i64) >> shift) as u64;
                             }
 
-                            _ => return Err(RVException::IllegalInstruction(instruction)),
+                            _ => return Err(RVException::IllegalInstruction),
                         }
                     }
 
@@ -302,7 +302,7 @@ impl CPU {
                         self.xregs[dest] = self.xregs[source1] & immediate;
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
@@ -332,19 +332,16 @@ impl CPU {
                             self.xregs[dest] = (self.xregs[source1] as i32 >> shift) as i64 as u64;
                         }
 
-                        _ => return Err(RVException::IllegalInstruction(instruction)),
+                        _ => return Err(RVException::IllegalInstruction),
                     },
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
             // OPERATION
             0b0110011 => {
                 match (funct3, funct7) {
-                    // =============================================================================
-                    // RV64I
-
                     // ADD
                     (0b000, 0b0000000) => {
                         self.xregs[dest] = self.xregs[source1] + self.xregs[source2];
@@ -487,15 +484,12 @@ impl CPU {
                         }
                     }
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
             // OPERATION32
             0b111011 => match (funct3, funct7) {
-                // =============================================================================
-                // RV64I
-
                 // ADDW
                 (0b000, 0b0000000) => {
                     self.xregs[dest] =
@@ -586,7 +580,7 @@ impl CPU {
                     }
                 }
 
-                _ => return Err(RVException::IllegalInstruction(instruction)),
+                _ => return Err(RVException::IllegalInstruction),
             },
 
             // MEM-MISC
@@ -595,7 +589,7 @@ impl CPU {
                     // FENCE
                     0b000 => {}
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
@@ -608,11 +602,11 @@ impl CPU {
                     // EBREAK
                     0b000000000001 => return Err(RVException::Breakpoint),
 
-                    _ => return Err(RVException::IllegalInstruction(instruction)),
+                    _ => return Err(RVException::IllegalInstruction),
                 }
             }
 
-            _ => return Err(RVException::IllegalInstruction(instruction)),
+            _ => return Err(RVException::IllegalInstruction),
         }
 
         Ok(())

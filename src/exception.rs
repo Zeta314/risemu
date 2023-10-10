@@ -3,5 +3,8 @@ pub enum RVException {
     StoreAccessFault,
     LoadAccessFault,
 
-    IllegalInstruction(u32),
+    IllegalInstruction,
+
+    EnvironmentCall,
+    Breakpoint,
 }
