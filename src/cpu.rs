@@ -59,12 +59,12 @@ impl CPU {
         match opcode {
             // LUI
             0b0110111 => {
-                self.xregs[dest] = _instruction & 0xFFFFF000;
+                self.xregs[dest] = (_instruction & 0xFFFFF000) as i32 as i64 as u64;
             }
 
             // AUIPC
             0b0010111 => {
-                self.xregs[dest] = self.pc + (_instruction & 0xFFFFF000);
+                self.xregs[dest] = self.pc + ((_instruction & 0xFFFFF000) as i32 as i64 as u64);
             }
 
             // JAL
@@ -76,8 +76,7 @@ impl CPU {
                     | ((_instruction >> 9) & 0x800)
                     | ((_instruction >> 20) & 0x7FE);
 
-                self.pc += offset;
-                self.pc -= 0x04;
+                self.pc = self.pc.wrapping_add(offset).wrapping_sub(0x04);
             }
 
             // JALR
@@ -86,9 +85,7 @@ impl CPU {
                 let offset = (_instruction as i32 as i64) >> 20;
                 let target = ((self.xregs[source1] as i64) + offset) & !0x01;
 
-                self.pc = target as u64;
-                self.pc -= 0x04;
-
+                self.pc = (target as u64).wrapping_sub(0x04);
                 self.xregs[dest] = tmp;
             }
 
@@ -103,48 +100,42 @@ impl CPU {
                     // BEQ
                     0b000 => {
                         if self.xregs[source1] == self.xregs[source2] {
-                            self.pc += immediate;
-                            self.pc -= 0x04;
+                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BNE
                     0b001 => {
                         if self.xregs[source1] != self.xregs[source2] {
-                            self.pc += immediate;
-                            self.pc -= 0x04;
+                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BLT
                     0b100 => {
                         if (self.xregs[source1] as i64) < (self.xregs[source2] as i64) {
-                            self.pc += immediate;
-                            self.pc -= 0x04;
+                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BGE
                     0b101 => {
                         if (self.xregs[source1] as i64) >= (self.xregs[source2] as i64) {
-                            self.pc += immediate;
-                            self.pc -= 0x04;
+                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BLTU
                     0b110 => {
                         if self.xregs[source1] < self.xregs[source2] {
-                            self.pc += immediate;
-                            self.pc -= 0x04;
+                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
                     // BGEU
                     0b111 => {
                         if self.xregs[source1] >= self.xregs[source2] {
-                            self.pc += immediate;
-                            self.pc -= 0x04;
+                            self.pc = self.pc.wrapping_add(immediate).wrapping_sub(0x04);
                         }
                     }
 
@@ -243,7 +234,7 @@ impl CPU {
                 match funct3 {
                     // ADDI
                     0b000 => {
-                        self.xregs[dest] = self.xregs[source1] + immediate;
+                        self.xregs[dest] = self.xregs[source1].wrapping_add(immediate);
                     }
 
                     // SLLI
@@ -314,7 +305,8 @@ impl CPU {
                 match funct3 {
                     // ADDIW
                     0b000 => {
-                        self.xregs[dest] = (self.xregs[source1] + immediate) as i32 as i64 as u64;
+                        self.xregs[dest] =
+                            (self.xregs[source1].wrapping_add(immediate)) as i32 as i64 as u64;
                     }
 
                     // SLLIW
@@ -325,7 +317,8 @@ impl CPU {
                     // SRLIW & SRAIW
                     0b101 => match funct7 {
                         0b000000 => {
-                            self.xregs[dest] = (self.xregs[source1] as u32 >> shift) as i64 as u64;
+                            self.xregs[dest] =
+                                (self.xregs[source1] as u32 >> shift) as i32 as i64 as u64;
                         }
 
                         0b100000 => {
@@ -344,12 +337,12 @@ impl CPU {
                 match (funct3, funct7) {
                     // ADD
                     (0b000, 0b0000000) => {
-                        self.xregs[dest] = self.xregs[source1] + self.xregs[source2];
+                        self.xregs[dest] = self.xregs[source1].wrapping_add(self.xregs[source2]);
                     }
 
                     // SUB
                     (0b000, 0b0100000) => {
-                        self.xregs[dest] = self.xregs[source1] - self.xregs[source2];
+                        self.xregs[dest] = self.xregs[source1].wrapping_sub(self.xregs[source2]);
                     }
 
                     // SLL
@@ -407,28 +400,29 @@ impl CPU {
 
                     // MUL
                     (0b000, 0b0000001) => {
-                        self.xregs[dest] =
-                            ((self.xregs[source1] as i64) * (self.xregs[source2] as i64)) as u64;
+                        self.xregs[dest] = ((self.xregs[source1] as i64)
+                            .wrapping_mul(self.xregs[source2] as i64))
+                            as u64;
                     }
 
                     // MULH
                     (0b001, 0b0000001) => {
                         self.xregs[dest] = ((self.xregs[source1] as i64 as i128)
-                            * (self.xregs[source2] as i64 as i128)
+                            .wrapping_mul(self.xregs[source2] as i64 as i128)
                             >> 64) as u64;
                     }
 
                     // MULHSU
                     (0b010, 0b0000001) => {
                         self.xregs[dest] = ((self.xregs[source1] as i64 as u128)
-                            * (self.xregs[source2] as u128)
+                            .wrapping_mul(self.xregs[source2] as u128)
                             >> 64) as u64;
                     }
 
                     // MULHU
                     (0b011, 0b0000001) => {
                         self.xregs[dest] = ((self.xregs[source1] as u128)
-                            * (self.xregs[source2] as u128)
+                            .wrapping_mul(self.xregs[source2] as u128)
                             >> 64) as u64;
                     }
 
@@ -442,7 +436,7 @@ impl CPU {
                         } else if dividend == i64::MIN && divisor == -1 {
                             dividend as u64 // overflow
                         } else {
-                            (dividend / divisor) as u64
+                            dividend.wrapping_div(divisor) as u64
                         }
                     }
 
@@ -454,7 +448,7 @@ impl CPU {
                         self.xregs[dest] = if divisor == 0 {
                             u64::MAX // division by zero
                         } else {
-                            dividend / divisor
+                            dividend.wrapping_div(divisor)
                         }
                     }
 
@@ -468,7 +462,7 @@ impl CPU {
                         } else if dividend == i64::MIN && divisor == -1 {
                             0 // overflow
                         } else {
-                            (dividend % divisor) as u64
+                            dividend.wrapping_rem(divisor) as u64
                         }
                     }
 
@@ -480,7 +474,7 @@ impl CPU {
                         self.xregs[dest] = if divisor == 0 {
                             dividend // division by zero
                         } else {
-                            dividend % divisor
+                            dividend.wrapping_rem(divisor)
                         }
                     }
 
@@ -492,13 +486,14 @@ impl CPU {
             0b111011 => match (funct3, funct7) {
                 // ADDW
                 (0b000, 0b0000000) => {
-                    self.xregs[dest] =
-                        (self.xregs[source1] + self.xregs[source2]) as i32 as i64 as u64;
+                    self.xregs[dest] = (self.xregs[source1].wrapping_add(self.xregs[source2]))
+                        as i32 as i64 as u64;
                 }
 
                 // SUBW
                 (0b000, 0b0100000) => {
-                    self.xregs[dest] = (self.xregs[source1] - self.xregs[source2]) as i32 as u64;
+                    self.xregs[dest] =
+                        (self.xregs[source1].wrapping_sub(self.xregs[source2])) as i32 as u64;
                 }
 
                 // SLLW
@@ -524,8 +519,9 @@ impl CPU {
 
                 // MULW
                 (0b000, 0b0000001) => {
-                    self.xregs[dest] =
-                        ((self.xregs[source1] as i32) * (self.xregs[source2] as i32)) as i64 as u64;
+                    self.xregs[dest] = ((self.xregs[source1] as i32)
+                        .wrapping_mul(self.xregs[source2] as i32))
+                        as i64 as u64;
                 }
 
                 // DIVW
@@ -538,7 +534,7 @@ impl CPU {
                     } else if dividend == i32::MIN && divisor == -1 {
                         dividend as i64 as u64 // overflow
                     } else {
-                        (dividend / divisor) as i64 as u64
+                        dividend.wrapping_div(divisor) as i64 as u64
                     }
                 }
 
@@ -550,7 +546,7 @@ impl CPU {
                     self.xregs[dest] = if divisor == 0 {
                         u64::MAX // division by zero
                     } else {
-                        (dividend / divisor) as i32 as i64 as u64
+                        dividend.wrapping_div(divisor) as i32 as i64 as u64
                     }
                 }
 
@@ -564,7 +560,7 @@ impl CPU {
                     } else if dividend == i32::MIN && divisor == -1 {
                         0 // overflow
                     } else {
-                        (dividend % divisor) as i64 as u64
+                        dividend.wrapping_rem(divisor) as i64 as u64
                     }
                 }
 
@@ -576,7 +572,7 @@ impl CPU {
                     self.xregs[dest] = if divisor == 0 {
                         dividend as i32 as i64 as u64 // division by zero
                     } else {
-                        (dividend % divisor) as i32 as i64 as u64
+                        dividend.wrapping_rem(divisor) as i32 as i64 as u64
                     }
                 }
 
