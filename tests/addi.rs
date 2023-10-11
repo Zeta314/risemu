@@ -1,4 +1,5 @@
 use risemu::emulator::Emulator;
+use risemu::exception::RVException;
 
 mod macros;
 
