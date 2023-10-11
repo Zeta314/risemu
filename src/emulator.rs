@@ -2,6 +2,7 @@ use crate::{
     bus::{Address, Bus, RAM_BASE},
     cpu::CPU,
     dram::DRAM,
+    exception::RVException,
 };
 
 pub struct Emulator {
@@ -26,16 +27,9 @@ impl Emulator {
         self.cpu.pc = value;
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<(), RVException> {
         loop {
-            match self.cpu.fetch_and_execute() {
-                Ok(_) => {}
-                Err(ex) => {
-                    println!("{ex:#?} @ {:#x}", self.cpu.pc);
-
-                    break;
-                }
-            }
+            self.cpu.fetch_and_execute()?;
         }
     }
 }
